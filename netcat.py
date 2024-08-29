@@ -10,9 +10,17 @@ import threading
 def execute(cmd):
     cmd = cmd.strip()
     if not cmd:
-        return
-    output = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
-    return output.decode()
+        return ""
+    try:
+        print(f"Executing command: {cmd}")
+        output = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
+        return output.decode()
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed: {e}")
+        return e.output.decode()
+    except Exception as e:
+        print(f"Execution error: {e}")
+        return f"Failed to execute command: {str(e)}\n"
 
 
 class NetCat:
@@ -30,35 +38,32 @@ class NetCat:
 
     def send(self):
         self.socket.connect((self.args.target, self.args.port))
+        print(f"Connected to {self.args.target}:{self.args.port}")
         if self.buffer:
             self.socket.send(self.buffer)
         try:
             while True:
-                recv_len = 1
-                response = ""
-                while recv_len:
-                    data = self.socket.recv(4096)
-                    recv_len = len(data)
-                    response += data.decode()
-                    if recv_len < 4096:
-                        break
-                if response:
-                    print(response)
-                    buffer = input("> ")
-                    buffer += "\n"
-                    self.socket.send(buffer.encode())
+                data = self.socket.recv(4096)
+                if data:
+                    print(data.decode())
+                else:
+                    break
         except KeyboardInterrupt:
             print("User terminated.")
             self.socket.close()
             sys.exit()
 
+
     def listen(self):
         self.socket.bind((self.args.target, self.args.port))
         self.socket.listen(5)
+        print(f"Listening on {self.args.target}:{self.args.port}")
         while True:
-            client_socket, _ = self.socket.accept()
+            client_socket, addr = self.socket.accept()
+            print(f"Connection established with {addr}")
             client_thread = threading.Thread(target=self.handle, args=(client_socket,))
             client_thread.start()
+
 
     def handle(self, client_socket):
         if self.args.execute:
